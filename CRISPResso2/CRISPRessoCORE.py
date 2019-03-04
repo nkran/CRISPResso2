@@ -1110,6 +1110,7 @@ def main():
         class_counts = {} # number of reads in each class e.g. "ref1_UNMODIFIED" -> 50
 
         alleles_list = [] #will be turned into df with rows with information for each variant (allele)
+        alleles_list_detailed = [] #will be turned into df with rows with detailed information for each variant (allele)
 
         #for each reference, the following are computed individually
         all_insertion_count_vectors = {} #all insertions (including quantification window bases)
@@ -1244,6 +1245,22 @@ def main():
                 }
                 alleles_list.append(alleleRow)
 
+                alleleRow_detailed = {'#Reads': variantCount,
+                            'Aligned_Sequence': variantPayload['aln_seq'],
+                            'Reference_Sequence': variantPayload['aln_ref'],
+
+                            'insertion_coordinates': variantPayload['insertion_coordinates'],
+                            'deletion_coordinates': variantPayload['deletion_coordinates'],
+                            'substitutions': variantPayload['all_substitution_positions'],
+
+                            'Reference_Name': 'AMBIGUOUS_'+aln_ref_names[0],
+                            'Read_Status': variantPayload['classification'],
+                            'Aligned_Reference_Names': "&".join(aln_ref_names),
+                            'Aligned_Reference_Scores': "&".join([str(x) for x in aln_ref_scores]),
+                            'ref_positions': variantPayload['ref_positions']
+                }
+                alleles_list_detailed.append(alleleRow_detailed)
+
                 class_name = 'AMBIGUOUS'
                 if class_name not in class_counts:
                         class_counts[class_name] = 0
@@ -1281,6 +1298,26 @@ def main():
                                'ref_positions':variantPayload['ref_positions']
                     }
                     alleles_list.append(alleleRow)
+
+                    alleleRow_detailed = {'#Reads': variantCount,
+                                'Aligned_Sequence': variantPayload['aln_seq'],
+                                'Reference_Sequence': variantPayload['aln_ref'],
+
+                                'insertion_coordinates': variantPayload['insertion_coordinates'],
+                                'deletion_coordinates': variantPayload['deletion_coordinates'],
+                                'substitutions': variantPayload['all_substitution_positions'],
+
+                                'all_insertion_positions': variantPayload['all_insertion_positions'],
+                                'n_inserted': variantPayload['insertion_n'],
+                                'all_deletion_positions': variantPayload['all_deletion_positions'],
+
+                                'Reference_Name': variantPayload['ref_name'],
+                                'Read_Status': variantPayload['classification'],
+                                'Aligned_Reference_Names': "&".join(aln_ref_names),
+                                'Aligned_Reference_Scores': "&".join([str(x) for x in aln_ref_scores]),
+                                'ref_positions': variantPayload['ref_positions']
+                    }
+                    alleles_list_detailed.append(alleleRow_detailed)
 
                     this_effective_len= refs[ref_name]['sequence_length'] #how long is this alignment (insertions increase length, deletions decrease length)
 
@@ -1566,10 +1603,18 @@ def main():
         df_alleles['%Reads']=df_alleles['#Reads']/N_TOTAL*100
         df_alleles[['n_deleted','n_inserted','n_mutated']] = df_alleles[['n_deleted','n_inserted','n_mutated']].astype(int)
 
+        # set up detailed allele table and group them by common indel
+        df_alleles_detailed = pd.DataFrame(alleles_list_detailed)
+        df_alleles_grouped = CRISPRessoShared.get_dataframe_grouped_indels(df_alleles_detailed)
+        alleles_indel_grouped_table = df_alleles_grouped.agg(sum)
+        alleles_indel_grouped_table['%Reads'] = alleles_indel_grouped_table['#Reads'] / N_TOTAL * 100
+
         if np.sum(np.array(map(int,pd.__version__.split('.')))*(100,10,1))< 170:
-           df_alleles.sort('#Reads',ascending=False,inplace=True)
+            df_alleles.sort('#Reads',ascending=False,inplace=True)
+            alleles_indel_grouped_table.sort('#Reads', ascending=False, inplace=True)
         else:
-           df_alleles.sort_values(by='#Reads',ascending=False,inplace=True)
+            df_alleles.sort_values(by='#Reads',ascending=False,inplace=True)
+            alleles_indel_grouped_table.sort_values(by='#Reads', ascending=False, inplace=True)
 
         def calculate_range(l):
             try:
@@ -1762,6 +1807,31 @@ def main():
         os.remove(allele_frequency_table_fileLoc)
         crispresso2_info['allele_frequency_table_filename'] = os.path.basename(allele_frequency_table_filename) #filename is the name of the file in the zip
         crispresso2_info['allele_frequency_table_zip_filename'] = os.path.basename(allele_frequency_table_zip_filename)
+
+        alleles_indel_grouped_table_filename = 'Alleles_grouped_frequency_table.txt'
+        alleles_indel_grouped_table_fileLoc = _jp(alleles_indel_grouped_table_filename)
+        alleles_indel_grouped_table.to_csv(alleles_indel_grouped_table_fileLoc, sep='\t', header=True)
+        
+        alleles_indel_grouped_detailed_table_filename = 'Alleles_grouped_frequency_table_detailed.txt'
+        alleles_indel_grouped_detailed_table_fileLoc = _jp(alleles_indel_grouped_detailed_table_filename)
+        alleles_indel_grouped_detailed_table_zip_filename = _jp('Alleles_grouped_frequency_table_detailed.zip')
+
+        with open(alleles_indel_grouped_detailed_table_fileLoc, 'w+') as outfile:
+            for tag, df_group in df_alleles_grouped:
+                outfile.write('{} ---------------- \n'.format(tag))
+                
+                for idx, row in df_group.iterrows():
+                    outfile.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(row['indel_tag'],
+                                                                        row['insertion_tag'],
+                                                                        row['deletion_tag'],
+                                                                        row['substitution_tag'],
+                                                                        row['#Reads'],
+                                                                        row['#Reads'] / N_TOTAL * 100,
+                                                                        row['Aligned_Sequence']))                
+
+        with zipfile.ZipFile(alleles_indel_grouped_detailed_table_zip_filename, 'w', zipfile.ZIP_DEFLATED) as myzip:
+            myzip.write(alleles_indel_grouped_detailed_table_fileLoc, alleles_indel_grouped_detailed_table_filename)
+        os.remove(alleles_indel_grouped_detailed_table_fileLoc)
 
         if args.crispresso1_mode:
             with open(_jp('Quantification_of_editing_frequency.txt'),'w+') as outfile:

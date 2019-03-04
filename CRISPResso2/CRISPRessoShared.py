@@ -604,6 +604,75 @@ def get_dataframe_around_cut_debug(df_alleles, cut_point,offset):
     df_alleles_around_cut['Unedited']=df_alleles_around_cut['Unedited']>0
     return df_alleles_around_cut
 
+
+def get_dataframe_grouped_indels(df_alleles_detailed):
+
+    def get_del_tag(x):
+        tags = []
+        if len(x['deletion_coordinates']) > 0:
+            for pair in x['deletion_coordinates']:
+                start, end = pair
+                del_seq = x['Reference_Sequence'][start:end]
+                tags.append('{}-{}-{}'.format(start, del_seq, end))        
+            return '__'.join(tags)
+        
+        else:
+            return 'WT'
+
+
+    def get_ins_tag(x):
+        tags = []
+        if len(x['insertion_coordinates']) > 0:
+            for pair in x['insertion_coordinates']:
+                start = pair[0] + 1
+                ins_length = int(x['n_inserted'])
+                ins_seq = x['Aligned_Sequence'][start:start+ins_length]
+                tags.append('{}+{}+{}'.format(start, ins_seq, start+ins_length))
+            return '__'.join(tags)
+        
+        else:
+            return 'WT'
+
+
+    def get_sub_tag(x):
+        tags = []
+        if len(x['substitutions']) > 0:
+            for pos in x['substitutions']:
+                ref = x['Reference_Sequence'][pos]
+                sub = x['Aligned_Sequence'][pos]
+                tags.append('{}{}*{}'.format(pos, ref, sub))
+            return '__'.join(tags)
+        
+        else:
+            return 'WT'
+
+        
+    def get_indel_tag(x):
+        del_tag = x['deletion_tag']
+        ins_tag = x['insertion_tag']
+        indel_tag = ''
+
+        if del_tag == ins_tag:
+            indel_tag = 'WT'
+        elif del_tag == 'WT':
+            indel_tag = ins_tag
+        elif ins_tag == 'WT':
+            indel_tag = del_tag
+        else:
+            indel_tag == '{}__{}'.format(del_tag, ins_tag)
+        
+        return indel_tag
+
+
+    df_alleles_detailed['deletion_tag'] = df_alleles_detailed.apply(get_del_tag, axis=1)
+    df_alleles_detailed['insertion_tag'] = df_alleles_detailed.apply(get_ins_tag, axis=1)
+    df_alleles_detailed['substitution_tag'] = df_alleles_detailed.apply(get_sub_tag, axis=1)
+    df_alleles_detailed['indel_tag'] = df_alleles_detailed.apply(get_indel_tag, axis=1)
+    df_alleles_grouped = df_alleles_detailed.groupby('indel_tag')
+    
+    return df_alleles_grouped
+
+
 def get_amplicon_info_for_guides(ref_seq,guides,quantification_window_center,quantification_window_size,quantification_window_coordinates,exclude_bp_from_left,exclude_bp_from_right,plot_window_size):
     """
     gets cut site and other info for a reference sequence and a given list of guides
