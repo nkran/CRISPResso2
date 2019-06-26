@@ -1810,7 +1810,7 @@ def main():
 
         alleles_indel_grouped_table_filename = 'Alleles_grouped_frequency_table.txt'
         alleles_indel_grouped_table_fileLoc = _jp(alleles_indel_grouped_table_filename)
-        alleles_indel_grouped_table.to_csv(alleles_indel_grouped_table_fileLoc, sep='\t', header=True)
+        alleles_indel_grouped_table[['#Reads', '%Reads']].to_csv(alleles_indel_grouped_table_fileLoc, sep='\t', header=True)
         
         alleles_indel_grouped_detailed_table_filename = 'Alleles_grouped_frequency_table_detailed.txt'
         alleles_indel_grouped_detailed_table_fileLoc = _jp(alleles_indel_grouped_detailed_table_filename)

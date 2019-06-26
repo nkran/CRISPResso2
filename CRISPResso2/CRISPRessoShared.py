@@ -609,10 +609,15 @@ def get_dataframe_grouped_indels(df_alleles_detailed):
 
     def get_del_tag(x):
         tags = []
+
         if len(x['deletion_coordinates']) > 0:
             for pair in x['deletion_coordinates']:
                 start, end = pair
-                del_seq = x['Reference_Sequence'][start:end]
+                
+                ref_start = x['ref_positions'].index(start)
+                ref_end = x['ref_positions'].index(end)
+
+                del_seq = x['Reference_Sequence'][ref_start:ref_end]
                 tags.append('{}-{}-{}'.format(start, del_seq, end))        
             return '__'.join(tags)
         
@@ -638,15 +643,16 @@ def get_dataframe_grouped_indels(df_alleles_detailed):
         tags = []
         if len(x['substitutions']) > 0:
             for pos in x['substitutions']:
-                ref = x['Reference_Sequence'][pos]
-                sub = x['Aligned_Sequence'][pos]
-                tags.append('{}{}*{}'.format(pos, ref, sub))
+                ref_pos = x['ref_positions'].index(pos)
+                ref_base = x['Reference_Sequence'][ref_pos]
+                sub_base = x['Aligned_Sequence'][ref_pos]
+                tags.append('{}*{}/{}'.format(pos, ref_base, sub_base))
             return '__'.join(tags)
         
         else:
             return 'WT'
 
-        
+
     def get_indel_tag(x):
         del_tag = x['deletion_tag']
         ins_tag = x['insertion_tag']
